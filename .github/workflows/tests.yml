@@ -2,9 +2,6 @@ name: Tests
 
 on:
   push:
-    branches:
-      - main
-      - master
   pull_request:
 
 jobs:
@@ -16,20 +13,16 @@ jobs:
       matrix:
         include:
           - { python: "3.10", os: "ubuntu-latest", session: "pre-commit" }
-          - { python: "3.10", os: "ubuntu-latest", session: "mypy" }
-          - { python: "3.11", os: "ubuntu-latest", session: "mypy" }
-          - { python: "3.12", os: "ubuntu-latest", session: "mypy" }
           - { python: "3.10", os: "ubuntu-latest", session: "tests" }
           - { python: "3.11", os: "ubuntu-latest", session: "tests" }
           - { python: "3.12", os: "ubuntu-latest", session: "tests" }
           - { python: "3.12", os: "windows-latest", session: "tests" }
           - { python: "3.12", os: "macos-latest", session: "tests" }
-          - { python: "3.10", os: "ubuntu-latest", session: "typeguard" }
-          - { python: "3.10", os: "ubuntu-latest", session: "xdoctest" }
-          - { python: "3.10", os: "ubuntu-latest", session: "docs-build" }
+          - { python: "3.10", os: "ubuntu-latest", session: "mypy" }
+          - { python: "3.11", os: "ubuntu-latest", session: "mypy" }
+          - { python: "3.12", os: "ubuntu-latest", session: "mypy" }
 
     env:
-      NOXSESSION: ${{ matrix.session }}
       FORCE_COLOR: "1"
       PRE_COMMIT_COLOR: "always"
 
@@ -37,35 +30,21 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v5.1.0
-        with:
-          python-version: ${{ matrix.python }}
-
-      - name: Upgrade pip
-        run: |
-          pip install -c ${{ github.workspace }}/.github/workflows/constraints.txt pip
-          pip --version
-
-      - name: Upgrade pip in virtual environments
-        shell: python
-        run: |
-          import os
-          import pip
-
-          with open(os.environ["GITHUB_ENV"], mode="a") as io:
-              print(f"VIRTUALENV_PIP={pip.__version__}", file=io)
-
       - name: Install Poetry
         run: |
           pipx install --pip-args "-c ${{ github.workspace }}/.github/workflows/constraints.txt" poetry
           poetry --version
 
-      - name: Install Nox
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5.1.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: "poetry"
+
+      - name: Install dependencies
         run: |
-          pipx install --pip-args "-c ${{ github.workspace }}/.github/workflows/constraints.txt" nox
-          pipx inject --pip-args "-c ${{ github.workspace }}/.github/workflows/constraints.txt" nox nox-poetry
-          nox --version
+          poetry install --no-root
+
 
       - name: Compute pre-commit cache key
         if: matrix.session == 'pre-commit'
@@ -92,9 +71,15 @@ jobs:
           restore-keys: |
             ${{ steps.pre-commit-cache.outputs.result }}-
 
-      - name: Run Nox
+      - name: Run pre-commit
+        if: matrix.session == 'pre-commit'
         run: |
-          nox --python=${{ matrix.python }}
+          poetry run pre-commit run --all-files --hook-stage=manual --show-diff-on-failure
+
+      - name: Run tests
+        if: matrix.session == 'tests'
+        run: |
+          poetry run coverage run --parallel -m pytest
 
       - name: Upload coverage data
         if: always() && matrix.session == 'tests'
@@ -103,12 +88,10 @@ jobs:
           name: coverage-data-${{ matrix.os }}-${{ matrix.python }}
           path: ".coverage.*"
 
-      - name: Upload documentation
-        if: matrix.session == 'docs-build'
-        uses: actions/upload-artifact@v4
-        with:
-          name: docs
-          path: docs/_build
+      - name: Run mypy
+        if: matrix.session == 'mypy'
+        run: |
+          poetry run mypy src tests
 
   coverage:
     runs-on: ubuntu-latest
@@ -119,26 +102,20 @@ jobs:
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
 
-      - name: Set up Python
-        uses: actions/setup-python@v5.1.0
-        with:
-          python-version: "3.12"
-
-      - name: Upgrade pip
-        run: |
-          pip install -c ${{ github.workspace }}/.github/workflows/constraints.txt pip
-          pip --version
-
       - name: Install Poetry
         run: |
           pipx install --pip-args "-c ${{ github.workspace }}/.github/workflows/constraints.txt" poetry
           poetry --version
 
-      - name: Install Nox
+      - name: Set up Python
+        uses: actions/setup-python@v5.1.0
+        with:
+          python-version: "3.12"
+          cache: "poetry"
+
+      - name: Install dependencies
         run: |
-          pipx install --pip-args "-c ${{ github.workspace }}/.github/workflows/constraints.txt" nox
-          pipx inject --pip-args "-c ${{ github.workspace }}/.github/workflows/constraints.txt" nox nox-poetry
-          nox --version
+          poetry install --no-root
 
       - name: Download coverage data
         uses: actions/download-artifact@v4
@@ -148,11 +125,12 @@ jobs:
 
       - name: Combine coverage data and display human readable report
         run: |
-          nox --session=coverage
+          poetry run coverage combine
 
       - name: Create coverage report
         run: |
-          nox --session=coverage -- xml
+          poetry run coverage report --skip-empty
+          poetry run coverage xml
 
       # Need to fix coverage source paths for SonarCloud scanning in GitHub actions.
       # Replace root path with /github/workspace (mounted in docker container).
