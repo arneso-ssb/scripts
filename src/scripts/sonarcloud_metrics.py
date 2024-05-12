@@ -28,9 +28,9 @@ def fetch_all_pages(
     """
     data_list = []
     while True:
-        response = requests.get(url, headers=headers, params=params)  # type: ignore
+        response = requests.get(url, headers=headers, params=params, timeout=10)  # type: ignore
         if response.status_code != 200:
-            raise ValueError(
+            raise requests.exceptions.HTTPError(
                 f"Failed to retrieve data: Status code {response.status_code}"
             )
         data = response.json()
