@@ -5,6 +5,7 @@ from typing import TypedDict
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+from datetime import datetime
 
 
 class ProjParams(TypedDict):  # noqa: D101
@@ -64,8 +65,9 @@ def main() -> None:
     projects_data = fetch_all_pages(base_url, headers, params)
     projects_df = pd.DataFrame(projects_data)
 
-    projects_df.to_excel(data_dir / "sonarcloud-projects.xlsx", index=False)
-    projects_df.to_csv(data_dir / "sonarcloud-projects.csv", index=False)
+    current_date = datetime.now().date()
+    projects_df.to_excel(data_dir / f"sc-projects-{current_date}.xlsx", index=False)
+    projects_df.to_csv(data_dir / f"sc-projects-{current_date}.csv", index=False)
 
     print(f"Number of projects: {len(projects_df)}")
     print(projects_df.head()[["key", "lastAnalysisDate"]])
