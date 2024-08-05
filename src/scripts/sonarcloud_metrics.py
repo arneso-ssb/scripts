@@ -1,11 +1,11 @@
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
 
 import pandas as pd
 import requests
 from dotenv import load_dotenv
-from datetime import datetime
 
 
 class ProjParams(TypedDict):  # noqa: D101
