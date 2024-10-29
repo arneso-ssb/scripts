@@ -145,6 +145,28 @@ def get_project_measures(project: str, headers: dict[str, str]) -> dict[str, str
     return {"key": project} | {item["metric"]: item["value"] for item in measures}
 
 
+def rating_to_letter(number: str) -> str:
+    rounded_number = max(round(float(number)), 1)
+    rating_map = {1: "A", 2: "B", 3: "C", 4: "D"}
+    return rating_map.get(rounded_number, "E")
+
+
+def reorder_projects_columns(df: pd.DataFrame) -> pd.DataFrame:
+    reorder_cols = [
+        "key",
+        "ncloc",
+        "files",
+        "functions",
+        "classes",
+        "maintainability_letter",
+        "security_letter",
+        "reliability_letter",
+    ]
+    remaining_cols = [col for col in df.columns if col not in reorder_cols]
+    new_order = reorder_cols + remaining_cols
+    return df[new_order]
+
+
 def get_all_project_measures(headers: dict[str, str]) -> pd.DataFrame:
     projects = get_selected_projects(Path("reportprojects.txt"))
     projects_measures = []
@@ -152,7 +174,17 @@ def get_all_project_measures(headers: dict[str, str]) -> pd.DataFrame:
     for idx, project in enumerate(projects, start=1):
         print(f"Getting data for [{idx}/{len(projects)}] {project}...")
         projects_measures.append(get_project_measures(project, headers))
-    return pd.DataFrame(projects_measures)
+    projects_df = pd.DataFrame(projects_measures)
+    projects_df["reliability_letter"] = projects_df["reliability_rating"].apply(
+        rating_to_letter
+    )
+    projects_df["security_letter"] = projects_df["security_rating"].apply(
+        rating_to_letter
+    )
+    projects_df["maintainability_letter"] = projects_df["sqale_rating"].apply(
+        rating_to_letter
+    )
+    return reorder_projects_columns(projects_df)
 
 
 def main() -> None:
@@ -171,7 +203,7 @@ def main() -> None:
         "ps": 100,  # page-size [0-500]
     }
 
-    # projects_df = get_all_projects(data_dir, headers, project_params)
+    projects_df = get_all_projects(data_dir, headers, project_params)
     # get_and_save_metrics(data_dir, headers)
     # get_project_measures("statisticsnorway_ssb-component-library", headers)
 
